@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Perplexity Explorer</title>
+<style>
+  :root { color-scheme:dark; --ink:#fbf4e8; --muted:#c4b7ae; --line:#493e3c; --scarlet:#ff553e; --paper:#100d0d; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 "Inter", system-ui, sans-serif }
+  main, nav { width:min(1100px,92%); margin:auto }
+  header { background:#130f0e; border-bottom:1px solid var(--line) }
+  nav,.brand,.actions,.chips { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+  nav { min-height:58px; justify-content:space-between }
+  a { color:inherit; text-decoration:none }
+  nav a:hover { text-decoration:underline }
+  .brand { font-weight:700; letter-spacing:-.04em }
+  .mark { width:27px; height:19px; background:var(--scarlet); transform:rotate(-12deg); border:3px double #201411; outline:1px solid var(--scarlet) }
+  nav .links { display:flex; gap:20px; font-size:.9rem }
+  /* The poster pairs a bright title with a stack of paper ticket stubs. */
+  .hero { display:grid; grid-template-columns:1.25fr 1fr; align-items:center; overflow:hidden; background:#1b1010; border:1px solid #61413b; border-radius:8px; margin:24px 0 18px; isolation:isolate }
+  h1,h2,h3,p { margin:0 }
+  .intro { padding:30px clamp(20px,4vw,48px); position:relative; z-index:1 }
+  h1,h2,.ticket b { font-family:Impact,"Avenir Next Condensed","Arial Narrow",system-ui,sans-serif; font-weight:900 }
+  h1 { text-transform:uppercase; font-size:clamp(3.3rem,6.8vw,5.8rem); line-height:.89; letter-spacing:-.046em }
+  h1 em { display:block; font-style:normal; color:var(--scarlet) }
+  .hero p { max-width:490px; margin-top:17px; color:#dfd0c4 }
+  .art { align-self:stretch; position:relative; background:repeating-linear-gradient(98deg,#721c16 0 27px,#6d1915 27px 28px); overflow:hidden; border-left:1px solid #884239 }
+  .ticket { position:absolute; left:50%; top:50%; width:min(72%,305px); aspect-ratio:2.28; display:grid; align-content:center; padding:0 9% 0 5%; background:#ffbc64; color:#261512; transform:translate(-50%,-41%) rotate(-12deg); box-shadow:5px 8px 0 #2b100d88; border-radius:6px; text-transform:uppercase }
+  .ticket::before { content:""; position:absolute; inset:7px; border:3px double currentColor; pointer-events:none }
+  .ticket::after { content:""; position:absolute; right:8%; top:12%; bottom:12%; width:9%; border-left:2px dashed currentColor; background:repeating-linear-gradient(0deg,transparent 0 3px,currentColor 3px 5px,transparent 5px 7px,currentColor 7px 8px); background-clip:content-box; padding-left:7px }
+  .ticket small { font:700 .7rem/1.6 ui-monospace,monospace; letter-spacing:.13em }
+  .ticket b { font-size:clamp(1.6rem,4vw,3.6rem); line-height:1; letter-spacing:-.04em }
+  .ticket.back { background:#ec6151; transform:translate(-44%,-66%) rotate(12deg) }
+  section { background:#211c1b; border:1px solid var(--line); border-radius:8px; padding:clamp(18px,3vw,30px); margin-bottom:16px; min-width:0 }
+  h2 { font-size:clamp(1.28rem,2vw,1.6rem); line-height:1.2; letter-spacing:-.045em; margin-bottom:16px }
+  h3 { font-size:1rem; margin:15px 0 4px }
+  .kicker,.meta,th { font:600 .78rem/1.4 ui-monospace,monospace; letter-spacing:.06em }
+  .kicker { color:#ff8774; margin-bottom:10px; text-transform:uppercase }
+  .meta { color:var(--muted); letter-spacing:0; margin-right:4px }
+  textarea,input { font:inherit; color:inherit; padding:10px 13px; border:1px solid #665855; border-radius:5px; width:100%; background:#151212 }
+  textarea { display:block; resize:vertical; min-height:72px; font-size:1.2rem }
+  button { line-height:1.35; font-family:inherit; font-size:.88rem; font-weight:600; color:#f8e5d4; border:1px solid #60524d; border-radius:4px; background:#302826; padding:8px 12px; cursor:pointer }
+  button:hover { border-color:#ff866d; background:#45302b }
+  button:disabled { opacity:.55; cursor:wait }
+  :focus-visible { outline:3px solid #ffd16b; outline-offset:3px }
+  .primary { padding:12px 19px; color:#1c0d09; background:var(--scarlet); border-color:transparent }
+  .primary:hover { background:#ff8169 }
+  .chips { margin:12px 0 18px; gap:7px }
+  .actions { border-top:1px solid var(--line); padding-top:16px; gap:15px }
+  .status,.hint { font-size:.9rem; color:var(--muted) }
+  .error { color:#ff9286; font-weight:600 }
+  .grid { display:grid; grid-template-columns:1.15fr 1fr; gap:16px }
+  .empty { padding:18px; border:1px dashed #594c47; border-radius:5px; color:var(--muted); background:#191515 }
+  table { width:100%; border-collapse:collapse; margin:16px 0; font-variant-numeric:tabular-nums }
+  td,th { padding:9px 5px; border-bottom:1px solid var(--line); text-align:right }
+  td:nth-child(-n+2),th:nth-child(-n+2) { text-align:left }
+  th { color:var(--muted); letter-spacing:0 }
+  code { font: .94rem ui-monospace,monospace; background:#40302c; padding:2px 5px; border-radius:4px; overflow-wrap:anywhere; white-space:pre-wrap }
+  .steps { overflow-wrap:anywhere }
+  .answer { background:#34271e; border-radius:10px; padding:12px 16px; margin-top:14px }
+  .answer h3 { margin:0 }
+  strong.score { display:block; font:normal 2.8rem/1.2 Georgia,serif; color:#ffd06e }
+  .manual { display:grid; grid-template-columns:1fr 1fr; gap:clamp(20px,4vw,50px) }
+  .edit { display:grid; grid-template-columns:minmax(0,1fr) minmax(70px,.6fr) auto; gap:7px; margin-bottom:8px }
+  .edit button { background:#302826 }
+  .bar { display:grid; grid-template-columns:minmax(60px,1fr) 2fr 65px; gap:8px; align-items:center; margin:10px 0; font-variant-numeric:tabular-nums }
+  .track { height:10px; background:#413430; border-radius:5px; overflow:hidden }
+  .fill { height:100%; background:#dfad63 }
+  .bar:first-child { font-weight:700; color:#ff927b }
+  .bar:first-child .fill { background:var(--scarlet) }
+  #manual { margin-bottom:44px }
+  @media(max-width:680px) {
+    .grid,.manual { grid-template-columns:1fr; gap:0 }
+    .manual { gap:12px }
+    .hero { grid-template-columns:1fr }
+    .art { height:105px; border-left:0; border-top:1px solid #884239 }
+    .ticket { width:180px; padding:0 25px 0 16px }
+    .ticket.back { transform:translate(-10%,-65%) rotate(12deg) }
+    .ticket.front { transform:translate(-80%,-44%) rotate(-10deg) }
+  }
+</style>
+</head>
+<body>
+<header><nav aria-label="Page navigation"><a class="brand" href="#top"><span class="mark"></span>Perplexity Explorer</a><div class="links"><a href="#model">Model</a><a href="#manual">Simulator</a></div></nav></header>
+<main id="top">
+  <div class="hero"><div class="intro"><h1>Perplexity <em>Explorer</em></h1><p>How surprising is a sentence? Follow each token’s probability to see how a language model scores the whole sequence.</p></div><div class="art" aria-hidden="true">
+      <div class="ticket back"><small>Start marker</small><b>50256</b></div>
+      <div class="ticket front"><small>Token sequence</small><b>Python</b></div>
+    </div></div>
+  <section id="model">
+    <p class="kicker">01 / Model input</p><h2><label for="sentence">Type a sentence</label></h2>
+    <textarea id="sentence" rows="2">I love Python</textarea>
+    <div class="chips" id="samples"><span class="meta">Try a sample</span><button>I love Python</button><button>Python love I</button><button>The capital of France is Paris</button></div>
+    <div class="actions"><button class="primary" id="calculate">Calculate perplexity</button><span id="status" class="status" role="status">First calculation downloads DistilGPT-2.</span></div>
+  </section>
+  <div class="grid">
+    <section><p class="kicker">02 / Token probabilities</p><h2>Probability of each token → perplexity</h2><div id="scores" class="empty">Calculate a sentence to see its token probabilities.</div></section>
+    <section><p class="kicker">03 / Next token</p><h2>What does the model predict next?</h2><div id="predictions" class="empty">The eight most likely next tokens will appear here.</div></section>
+  </div>
+  <section id="manual">
+    <p class="kicker">04 / Simulator</p><h2>Try it by hand</h2><p class="hint">Simulated, not from the model</p>
+    <div class="chips" id="presets"><span class="meta">Presets</span><button>I love Python</button><button>All 1/8</button><button>One surprising word</button></div>
+    <div class="manual"><div><div class="edit meta"><span>Token</span><span>Probability</span><span aria-hidden="true" style="visibility:hidden">Remove</span></div><div id="rows"></div><button id="add">+ Add token</button></div><div id="simulation" aria-live="polite"></div></div>
+  </section>
+</main>
+<!-- This module is inserted on the first calculation. Its import can fail without disabling the simulator. -->
+<template id="loader"><script type="module">
+import { AutoTokenizer, AutoModelForCausalLM, Tensor } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+window.modelTools = { AutoTokenizer, AutoModelForCausalLM, Tensor };
+window.modelToolsReady();
+</script></template>
+<script>
+'use strict';
+const byId = id => document.getElementById(id);
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+function number(value, digits = 4) {
+  if (value === 0) return '0';
+  if (value < 0.0001 || value >= 1e7) return value.toExponential(3);
+  return String(Number(value.toFixed(digits)));
+}
+// Keep very large products readable without ever multiplying the factors.
+function fromLog(logValue, digits) {
+  if (logValue < 700) return number(Math.exp(logValue), digits);
+  const power = Math.floor(logValue / Math.LN10);
+  return number(Math.exp(logValue - power * Math.LN10), 3) + ' × 10^' + power;
+}
+function tokenLabel(text) {
+  return text.replaceAll(' ', '␣').replaceAll('\n', '↵').replaceAll('\t', '⇥');
+}
+// Both experiments use the same table and the same log-space calculation.
+function showScores(target, tokens) {
+  const table = element('table');
+  const header = table.createTHead().insertRow();
+  for (const heading of ['#', 'Token', 'Probability P', '1/P']) header.append(element('th', heading));
+  const body = table.createTBody();
+  const factors = [];
+  let totalLoss = 0;
+  for (const [index, token] of tokens.entries()) {
+    totalLoss += token.loss; // loss = −ln(P)
+    const factor = fromLog(token.loss);
+    factors.push(factor);
+    const row = body.insertRow();
+    row.insertCell().textContent = index + 1;
+    row.insertCell().append(element('code', tokenLabel(token.name)));
+    row.insertCell().textContent = number(Math.exp(-token.loss));
+    row.insertCell().textContent = factor;
+  }
+  const steps = element('div', undefined, 'steps');
+  steps.append(element('h3', 'Step 1 · Multiply the reciprocals'),
+    element('p', factors.join(' × ') + ' ≈ ' + fromLog(totalLoss)),
+    element('h3', 'Step 2 · Count the tokens'), element('p', 'N = ' + tokens.length));
+  const answer = element('div', undefined, 'answer');
+  answer.append(element('h3', 'Step 3 · Perplexity'), element('p', '(' + fromLog(totalLoss) + ')^(1/' + tokens.length + ') ≈'),
+    element('strong', fromLog(totalLoss / tokens.length, 2), 'score'));
+  steps.append(answer);
+  target.className = '';
+  target.replaceChildren(table, steps);
+}
+
+const presets = [
+  [['I', .5], ['love', .8], ['Python', .2]],
+  Array.from({length:8}, (_, i) => ['Token ' + (i + 1), .125]),
+  [['The', .9], ['sky', .9], ['is', .9], ['velvet', .01]]
+];
+function addRow(name, probability) {
+  const row = element('div', undefined, 'edit');
+  const token = element('input');
+  token.value = name;
+  token.setAttribute('aria-label', 'Token name');
+  const prob = element('input');
+  prob.type = 'number';
+  prob.min = 0;
+  prob.max = 1;
+  prob.step = 'any';
+  prob.value = probability;
+  prob.setAttribute('aria-label', 'Token probability');
+  const remove = element('button', 'Remove');
+  remove.onclick = () => { row.remove(); updateSimulation(); };
+  row.append(token, prob, remove);
+  byId('rows').append(row);
+}
+function updateSimulation() {
+  const tokens = [];
+  const target = byId('simulation');
+  for (const row of byId('rows').children) {
+    const [name, prob] = row.querySelectorAll('input');
+    const p = prob.valueAsNumber;
+    if (!(p > 0 && p <= 1) || !name.value) {
+      target.textContent = 'Enter a token name and a probability greater than 0 and at most 1 in every row.';
+      return;
+    }
+    tokens.push({name:name.value, loss:-Math.log(p)});
+  }
+  if (tokens.length) showScores(target, tokens);
+  else target.textContent = 'Add a token to start calculating.';
+}
+function usePreset(index) {
+  byId('rows').replaceChildren();
+  for (const [name, p] of presets[index]) addRow(name, p);
+  updateSimulation();
+}
+byId('presets').querySelectorAll('button').forEach((button, i) => button.onclick = () => usePreset(i));
+byId('rows').oninput = updateSimulation;
+byId('add').onclick = () => { addRow('', ''); byId('rows').lastChild.firstChild.focus(); updateSimulation(); };
+usePreset(0);
+
+let tokenizer, model;
+async function loadModel() {
+  if (!window.modelTools) {
+    await new Promise((resolve, reject) => {
+      const script = element('script');
+      script.type = 'module';
+      script.textContent = byId('loader').content.querySelector('script').textContent;
+      window.modelToolsReady = resolve;
+      script.onerror = () => reject(new Error('Could not download Transformers.js. Check your internet connection and retry.'));
+      document.head.append(script);
+    });
+  }
+  const modelName = 'Xenova/distilgpt2';
+  tokenizer = await window.modelTools.AutoTokenizer.from_pretrained(modelName);
+  model = await window.modelTools.AutoModelForCausalLM.from_pretrained(modelName, {dtype:'q8'});
+}
+// Subtract the largest logit before exponentiating, then normalize across the whole vocabulary.
+function logNormalizer(row) {
+  let max = -Infinity;
+  for (const score of row) max = Math.max(max, score);
+  let sum = 0;
+  for (const score of row) sum += Math.exp(score - max);
+  return max + Math.log(sum);
+}
+function showPredictions(row) {
+  const normalizer = logNormalizer(row);
+  const ids = Array.from(row.keys()).sort((a,b) => row[b] - row[a]).slice(0,8);
+  const target = byId('predictions');
+  target.replaceChildren();
+  target.className = '';
+  for (const id of ids) {
+    const percent = 100 * Math.exp(row[id] - normalizer);
+    const bar = element('div', undefined, 'bar');
+    const track = element('div', undefined, 'track');
+    const fill = element('div', undefined, 'fill');
+    // Scale all bars to the leader; labels give absolute probabilities.
+    fill.style.width = (100 * Math.exp(row[id] - row[ids[0]])) + '%';
+    track.append(fill);
+    bar.append(element('code', tokenLabel(tokenizer.decode([id]))), track, element('span', number(percent, 2) + '%'));
+    target.append(bar);
+  }
+}
+const scores = byId('scores'), predictions = byId('predictions'), statusLine = byId('status');
+const emptyScores = scores.textContent, emptyPredictions = predictions.textContent;
+function clearResults() {
+  scores.className = predictions.className = 'empty';
+  scores.textContent = emptyScores;
+  predictions.textContent = emptyPredictions;
+}
+byId('sentence').oninput = () => {
+  clearResults();
+  statusLine.className = 'status';
+  statusLine.textContent = model ? 'Model ready' : 'First calculation downloads DistilGPT-2.';
+};
+async function calculate() {
+  clearResults();
+  statusLine.className = 'status';
+  const field = byId('sentence');
+  const sentence = field.value;
+  if (!sentence.trim()) { statusLine.textContent = 'Enter a sentence first.'; field.focus(); return; }
+  const buttons = byId('model').querySelectorAll('button');
+  for (const button of buttons) button.disabled = true;
+  field.readOnly = true;
+  try {
+    if (!model) { statusLine.textContent = 'Downloading the model…'; await loadModel(); }
+    statusLine.textContent = 'Calculating probabilities…';
+    const ids = [50256, ...tokenizer.encode(sentence)];
+    if (ids.length > 1024) throw new Error('Use at most 1,023 tokens so the start marker fits in the context window.');
+    const shape = [1, ids.length];
+    const {Tensor} = window.modelTools;
+    const input_ids = new Tensor('int64', BigInt64Array.from(ids, BigInt), shape);
+    const attention_mask = new Tensor('int64', new BigInt64Array(ids.length).fill(1n), shape);
+    const {logits} = await model({input_ids, attention_mask});
+    const vocab = logits.dims[2];
+    const rowAt = position => logits.data.subarray(position * vocab, (position + 1) * vocab);
+    const tokens = [];
+    // The previous position predicts the current token, including the first one.
+    for (let i = 1; i < ids.length; i++) {
+      const row = rowAt(i - 1);
+      tokens.push({name:tokenizer.decode([ids[i]]), loss:logNormalizer(row) - row[ids[i]]});
+    }
+    showScores(scores, tokens);
+    showPredictions(rowAt(ids.length - 1));
+    statusLine.textContent = 'Model ready';
+  } catch (error) {
+    clearResults();
+    statusLine.className = 'status error';
+    statusLine.textContent = (model ? 'Calculation failed. ' : 'Model download failed. Check your connection and retry. ') + error.message;
+  } finally {
+    for (const button of buttons) button.disabled = false;
+    field.readOnly = false;
+  }
+}
+byId('calculate').onclick = calculate;
+for (const button of byId('samples').querySelectorAll('button')) {
+  button.onclick = () => { byId('sentence').value = button.textContent; calculate(); };
+}
+</script>
+</body>
+</html>
