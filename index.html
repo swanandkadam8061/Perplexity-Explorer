@@ -104,14 +104,7 @@
     <div class="manual"><div><div class="edit meta"><span>Token</span><span>Probability</span><span aria-hidden="true" style="visibility:hidden">Remove</span></div><div id="rows"></div><button id="add">+ Add token</button></div><div id="simulation" aria-live="polite"></div></div>
   </section>
 </main>
-<!-- This module is inserted on the first calculation. Its import can fail without disabling the simulator. -->
-<template id="loader"><script type="module">
-import { AutoTokenizer, AutoModelForCausalLM, Tensor } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
-window.modelTools = { AutoTokenizer, AutoModelForCausalLM, Tensor };
-window.modelToolsReady();
-</script></template>
-<script>
-'use strict';
+<script type="module">
 const byId = id => document.getElementById(id);
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -210,21 +203,55 @@ byId('rows').oninput = updateSimulation;
 byId('add').onclick = () => { addRow('', ''); byId('rows').lastChild.firstChild.focus(); updateSimulation(); };
 usePreset(0);
 
-let tokenizer, model;
+let tokenizer, model, Tensor;
 async function loadModel() {
-  if (!window.modelTools) {
-    await new Promise((resolve, reject) => {
-      const script = element('script');
-      script.type = 'module';
-      script.textContent = byId('loader').content.querySelector('script').textContent;
-      window.modelToolsReady = resolve;
-      script.onerror = () => reject(new Error('Could not download Transformers.js. Check your internet connection and retry.'));
-      document.head.append(script);
-    });
+  let timer;
+  let active = true;
+  let fail;
+  const stalled = new Promise((_, reject) => { fail = reject; });
+  function progress(message) {
+    if (!active) return;
+    statusLine.textContent = message;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      fail(new Error('No progress for 90 seconds. Check access to jsDelivr and Hugging Face, then click Calculate perplexity to retry.'));
+    }, 90000);
   }
-  const modelName = 'Xenova/distilgpt2';
-  tokenizer = await window.modelTools.AutoTokenizer.from_pretrained(modelName);
-  model = await window.modelTools.AutoModelForCausalLM.from_pretrained(modelName, {dtype:'q8'});
+  async function download() {
+    progress('Loading Transformers.js…');
+    const library = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+    if (!active) return;
+    library.env.allowLocalModels = false;
+    // One WASM thread works in local files and on static hosts.
+    library.env.backends.onnx.wasm.numThreads = 1;
+    Tensor = library.Tensor;
+    const name = 'Xenova/distilgpt2';
+    progress('Downloading the tokenizer…');
+    const loadedTokenizer = await library.AutoTokenizer.from_pretrained(name);
+    if (!active) return;
+    progress('Downloading the model…');
+    const loadedModel = await library.AutoModelForCausalLM.from_pretrained(name, {
+      dtype: 'q8',
+      device: 'wasm',
+      progress_callback(event) {
+        if (event.status === 'progress' && event.file.endsWith('.onnx')) {
+          const mb = (event.loaded / 1e6).toFixed(1);
+          const total = event.total ? ' of ' + (event.total / 1e6).toFixed(1) : '';
+          progress('Downloading the model… ' + mb + total + ' MB');
+        }
+        if (event.status === 'done' && event.file.endsWith('.onnx')) progress('Starting the model in your browser…');
+      }
+    });
+    if (!active) { await loadedModel.dispose(); return; }
+    tokenizer = loadedTokenizer;
+    model = loadedModel;
+  }
+  try {
+    await Promise.race([download(), stalled]);
+  } finally {
+    active = false;
+    clearTimeout(timer);
+  }
 }
 // Subtract the largest logit before exponentiating, then normalize across the whole vocabulary.
 function logNormalizer(row) {
@@ -279,7 +306,6 @@ async function calculate() {
     const ids = [50256, ...tokenizer.encode(sentence)];
     if (ids.length > 1024) throw new Error('Use at most 1,023 tokens so the start marker fits in the context window.');
     const shape = [1, ids.length];
-    const {Tensor} = window.modelTools;
     const input_ids = new Tensor('int64', BigInt64Array.from(ids, BigInt), shape);
     const attention_mask = new Tensor('int64', new BigInt64Array(ids.length).fill(1n), shape);
     const {logits} = await model({input_ids, attention_mask});
